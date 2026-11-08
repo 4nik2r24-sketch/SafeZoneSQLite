@@ -2,17 +2,16 @@
 <androidx.coordinatorlayout.widget.CoordinatorLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/main"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="#0A0E18">
 
-    <!-- 1. El Mapa Interactivo -->
     <org.osmdroid.views.MapView
         android:id="@+id/map"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
-    <!-- 2. Capa Superior -->
     <LinearLayout
         android:id="@+id/capaSuperior"
         android:layout_width="match_parent"
@@ -20,19 +19,31 @@
         android:orientation="vertical"
         android:padding="16dp"
         android:layout_marginTop="24dp"
-        android:elevation="12dp">
+        android:elevation="10dp">
 
-        <!-- Fila: Contactos (Izquierda) y App Name (Derecha) -->
         <RelativeLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="12dp">
 
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_alignParentStart="true"
+                android:layout_centerVertical="true"
+                android:text=" SafeZone "
+                android:textColor="#000000"
+                android:textSize="20sp"
+                android:textStyle="bold"
+                android:background="#38BDF8"
+                android:paddingHorizontal="12dp"
+                android:paddingVertical="4dp"/>
+
             <androidx.cardview.widget.CardView
                 android:id="@+id/btnPerfilContacto"
                 android:layout_width="44dp"
                 android:layout_height="44dp"
-                android:layout_alignParentStart="true"
+                android:layout_alignParentEnd="true"
                 android:layout_centerVertical="true"
                 app:cardCornerRadius="22dp"
                 app:cardBackgroundColor="#38BDF8">
@@ -44,127 +55,116 @@
                     android:src="@android:drawable/ic_menu_myplaces"
                     app:tint="#000000" />
             </androidx.cardview.widget.CardView>
-
-            <TextView
-                android:id="@+id/tvAppName"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_alignParentEnd="true"
-                android:layout_centerVertical="true"
-                android:text=" SafeZone "
-                android:textColor="#000000"
-                android:textSize="20sp"
-                android:textStyle="bold"
-                android:background="@drawable/borde_rojo"
-                android:paddingHorizontal="16dp"
-                android:paddingVertical="6dp"/>
         </RelativeLayout>
 
-        <!-- Barra de Búsqueda -->
-        <androidx.cardview.widget.CardView
+        <com.google.android.material.card.MaterialCardView
             android:id="@+id/cardBuscador"
             android:layout_width="match_parent"
-            android:layout_height="48dp"
+            android:layout_height="52dp"
             app:cardBackgroundColor="#171B26"
-            app:cardCornerRadius="24dp">
+            app:cardCornerRadius="26dp"
+            app:cardElevation="8dp"
+            app:strokeWidth="1dp"
+            app:strokeColor="#2D3748">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:orientation="horizontal"
-                android:gravity="center_vertical">
+                android:gravity="center_vertical"
+                android:paddingStart="16dp"
+                android:paddingEnd="12dp">
+
+                <ImageView
+                    android:layout_width="22dp"
+                    android:layout_height="22dp"
+                    android:src="@android:drawable/ic_menu_search"
+                    app:tint="#94A3B8" />
 
                 <AutoCompleteTextView
                     android:id="@+id/txtBuscar"
                     android:layout_width="0dp"
                     android:layout_height="match_parent"
                     android:layout_weight="1"
-                    android:background="@android:color/transparent"
+                    android:background="@null"
                     android:hint="Buscar sector o dirección..."
                     android:textColorHint="#94A3B8"
                     android:textColor="#FFFFFF"
-                    android:paddingHorizontal="20dp"
-                    android:singleLine="true" />
+                    android:paddingStart="12dp"
+                    android:paddingEnd="8dp"
+                    android:textSize="15sp"
+                    android:inputType="text" />
 
                 <ImageView
                     android:id="@+id/btnLimpiarBuscador"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
-                    android:padding="8dp"
-                    android:layout_marginEnd="8dp"
+                    android:layout_width="28dp"
+                    android:layout_height="28dp"
+                    android:padding="4dp"
                     android:src="@android:drawable/ic_menu_close_clear_cancel"
                     app:tint="#94A3B8"
                     android:visibility="gone" />
             </LinearLayout>
-        </androidx.cardview.widget.CardView>
+        </com.google.android.material.card.MaterialCardView>
 
-        <!-- Botones de Filtro Temporal -->
-        <HorizontalScrollView
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:orientation="horizontal"
             android:layout_marginTop="12dp"
-            android:scrollbars="none">
-            <LinearLayout
-                android:layout_width="wrap_content"
+            android:weightSum="2">
+
+            <Button
+                android:id="@+id/btnFiltroVivo"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal">
+                android:layout_weight="1"
+                android:layout_marginEnd="4dp"
+                android:backgroundTint="#EF4444"
+                android:textColor="#FFFFFF"
+                android:text="En vivo"
+                android:textAllCaps="false"/>
 
-                <TextView
-                    android:id="@+id/btnFiltroVivo"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:background="@drawable/borde_rojo"
-                    android:text="En vivo"
-                    android:textColor="#000000"
-                    android:paddingHorizontal="16dp"
-                    android:paddingVertical="6dp"
-                    android:textSize="13sp"
-                    android:textStyle="bold" />
-
-                <TextView
-                    android:id="@+id/btnFiltro24h"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Historial 24h+"
-                    android:textColor="#94A3B8"
-                    android:layout_marginStart="8dp"
-                    android:background="#171B26"
-                    android:paddingHorizontal="16dp"
-                    android:paddingVertical="6dp"
-                    android:textSize="13sp" />
-            </LinearLayout>
-        </HorizontalScrollView>
+            <Button
+                android:id="@+id/btnFiltroHistorial"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="4dp"
+                android:backgroundTint="#171B26"
+                android:textColor="#94A3B8"
+                android:text="Historial"
+                android:textAllCaps="false"/>
+        </LinearLayout>
     </LinearLayout>
 
-    <!-- 3. Botón SOS (Movido hacia arriba para no ser tapado por el panel) -->
+    <!-- NUEVO: BOTÓN CENTRAR MAPA -->
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/btnCentrarMapa"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="20dp"
+        android:layout_marginBottom="160dp"
+        android:backgroundTint="#1E293B"
+        android:src="@android:drawable/ic_menu_mylocation"
+        app:tint="#38BDF8"
+        app:fabSize="mini"
+        app:elevation="6dp" />
+
+    <!-- BOTÓN FLOTANTE SOS -->
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/btnFlotanteSOS"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|end"
         android:layout_marginEnd="20dp"
-        android:layout_marginBottom="160dp"
-        android:backgroundTint="#FCA5A5"
-        android:src="@android:drawable/ic_dialog_alert"
-        app:tint="#7F1D1D"
-        android:elevation="16dp"
-        app:fabSize="normal" />
-
-    <!-- 4. Botón Reportar Manual -->
-    <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/btnFlotanteReportar"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="bottom|end"
-        android:layout_marginEnd="20dp"
-        android:layout_marginBottom="80dp"
+        android:layout_marginBottom="90dp"
         android:backgroundTint="#EF4444"
-        android:src="@android:drawable/ic_input_add"
+        android:src="@android:drawable/ic_dialog_alert"
         app:tint="#FFFFFF"
-        android:elevation="16dp"
-        app:fabSize="normal" />
+        app:fabSize="normal"
+        app:elevation="6dp" />
 
-    <!-- 5. Panel Inferior Deslizable -->
     <LinearLayout
         android:id="@+id/bottomSheet"
         android:layout_width="match_parent"
@@ -172,27 +172,33 @@
         android:background="#171B26"
         android:orientation="vertical"
         android:padding="20dp"
-        app:behavior_hideable="true"
-        app:behavior_peekHeight="0dp"
+        app:behavior_peekHeight="30dp"
+        app:behavior_hideable="false"
         app:layout_behavior="com.google.android.material.bottomsheet.BottomSheetBehavior">
+
+        <View
+            android:layout_width="40dp"
+            android:layout_height="4dp"
+            android:layout_gravity="center_horizontal"
+            android:background="#64748B"
+            android:layout_marginBottom="16dp" />
 
         <TextView
             android:id="@+id/tvTituloSector"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Ubicación Consultada"
-            android:textSize="20sp"
-            android:textStyle="bold"
-            android:textColor="#FFFFFF" />
+            android:text="Detalle del Sector"
+            android:textColor="#94A3B8"
+            android:textSize="13sp" />
 
         <TextView
             android:id="@+id/tvTipoCrimen"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="Nivel de Riesgo"
-            android:textSize="16sp"
-            android:textColor="#EF4444"
+            android:layout_marginTop="4dp"
+            android:text="Incidente Registrado"
+            android:textColor="#FFFFFF"
+            android:textSize="18sp"
             android:textStyle="bold" />
 
         <TextView
@@ -200,27 +206,36 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
-            android:textSize="14sp"
-            android:textColor="#94A3B8"
-            android:text="Horario crítico" />
+            android:text="Horario"
+            android:textColor="#F59E0B"
+            android:textSize="14sp" />
 
         <TextView
             android:id="@+id/tvDescripcion"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
+            android:layout_marginTop="8dp"
+            android:text="Descripción..."
+            android:textColor="#CBD5E1"
             android:textSize="14sp"
-            android:textColor="#94A3B8"
-            android:text="Descripción detallada..." />
+            android:layout_marginBottom="16dp" />
+
+        <ImageView
+            android:id="@+id/ivFotoReporte"
+            android:layout_width="match_parent"
+            android:layout_height="180dp"
+            android:scaleType="centerCrop"
+            android:visibility="gone"
+            android:background="#0A0E18"
+            android:layout_marginBottom="16dp"/>
 
         <Button
             android:id="@+id/btnRutaSegura"
             android:layout_width="match_parent"
-            android:layout_height="50dp"
-            android:layout_marginTop="20dp"
-            android:backgroundTint="#10B981"
-            android:textColor="@android:color/white"
-            android:textStyle="bold"
-            android:text="Trazar Ruta Segura" />
+            android:layout_height="52dp"
+            android:backgroundTint="#38BDF8"
+            android:text="Trazar Ruta Segura"
+            android:textColor="#000000"
+            android:textStyle="bold" />
     </LinearLayout>
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

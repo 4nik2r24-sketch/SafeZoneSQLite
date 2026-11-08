@@ -1,128 +1,126 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:orientation="vertical"
     android:background="#0A0E18"
-    android:padding="20dp">
+    android:padding="24dp">
 
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Nuevo Reporte"
+        android:textColor="#FFFFFF"
+        android:textSize="24sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="24dp"/>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Tipo de Incidente"
+        android:textColor="#94A3B8"
+        android:layout_marginBottom="4dp"/>
+
+    <!-- Menú sin opción predeterminada -->
+    <Spinner
+        android:id="@+id/dropTipoCrimen"
+        android:layout_width="match_parent"
+        android:layout_height="52dp"
+        android:background="#171B26"
+        android:layout_marginBottom="16dp"/>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Horario del Suceso"
+        android:textColor="#94A3B8"
+        android:layout_marginBottom="4dp"/>
+
+    <!-- Editable pero se autocompleta con el reloj del celular -->
+    <EditText
+        android:id="@+id/etHorario"
+        android:layout_width="match_parent"
+        android:layout_height="52dp"
+        android:background="#171B26"
+        android:textColor="#FFFFFF"
+        android:padding="12dp"
+        android:hint="Ej: 22:30 hrs"
+        android:textColorHint="#475569"
+        android:inputType="text"
+        android:layout_marginBottom="16dp"/>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Descripción Adicional (Opcional)"
+        android:textColor="#94A3B8"
+        android:layout_marginBottom="4dp"/>
+
+    <EditText
+        android:id="@+id/etDescripcion"
+        android:layout_width="match_parent"
+        android:layout_height="100dp"
+        android:background="#171B26"
+        android:textColor="#FFFFFF"
+        android:gravity="top|start"
+        android:padding="12dp"
+        android:hint="Describa el hecho..."
+        android:textColorHint="#475569"
+        android:inputType="textMultiLine"
+        android:layout_marginBottom="16dp"/>
+
+    <!-- Sector para foto y vista previa -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical">
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="24dp">
 
-        <TextView
-            android:id="@+id/btnVolverReporte"
+        <Button
+            android:id="@+id/btnTomarFoto"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="← Volver al Mapa"
+            android:backgroundTint="#1E293B"
             android:textColor="#38BDF8"
-            android:textSize="16sp"
-            android:textStyle="bold"
-            android:layout_marginBottom="16dp"
-            android:padding="8dp"/>
+            android:text="📸 Añadir Foto"/>
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Reportar Incidente"
-            android:textColor="#EF4444"
-            android:textSize="24sp"
-            android:textStyle="bold"
-            android:layout_marginBottom="8dp"/>
-
-        <TextView
-            android:id="@+id/tvUbicacionMarcada"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="📍 Punto seleccionado en el mapa"
-            android:textColor="#94A3B8"
-            android:textSize="13sp"
-            android:layout_marginBottom="24dp"/>
-
-        <!-- Menú: Tipo de Delito -->
-        <com.google.android.material.textfield.TextInputLayout
-            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="Tipo de delito"
-            app:hintTextColor="#94A3B8"
-            android:textColorHint="#94A3B8"
-            app:boxBackgroundColor="#171B26"
-            app:boxStrokeColor="#38BDF8"
-            android:layout_marginBottom="16dp">
-
-            <AutoCompleteTextView
-                android:id="@+id/dropTipoCrimen"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:inputType="none"
-                android:textColor="#FFFFFF" />
-        </com.google.android.material.textfield.TextInputLayout>
-
-        <!-- Menú: Horario en Formato 24 Horas -->
-        <com.google.android.material.textfield.TextInputLayout
-            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="Horario del suceso (24 hrs)"
-            app:hintTextColor="#94A3B8"
-            android:textColorHint="#94A3B8"
-            app:boxBackgroundColor="#171B26"
-            app:boxStrokeColor="#38BDF8"
-            android:layout_marginBottom="16dp">
-
-            <AutoCompleteTextView
-                android:id="@+id/dropHorario"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:inputType="none"
-                android:textColor="#FFFFFF" />
-        </com.google.android.material.textfield.TextInputLayout>
-
-        <!-- Campo: Descripción -->
-        <com.google.android.material.textfield.TextInputLayout
-            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="Descripción o características (Opcional)"
-            app:hintTextColor="#94A3B8"
-            android:textColorHint="#94A3B8"
-            app:boxBackgroundColor="#171B26"
-            app:boxStrokeColor="#38BDF8"
-            android:layout_marginBottom="24dp">
-
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/etDescripcion"
-                android:layout_width="match_parent"
-                android:layout_height="100dp"
-                android:gravity="top|start"
-                android:inputType="textMultiLine"
-                android:textColor="#FFFFFF" />
-        </com.google.android.material.textfield.TextInputLayout>
-
-        <!-- Botón de Envío Directo -->
-        <Button
-            android:id="@+id/btnEnviarReporte"
-            android:layout_width="match_parent"
+        <ImageView
+            android:id="@+id/ivVistaPreviaFoto"
+            android:layout_width="60dp"
             android:layout_height="60dp"
-            android:backgroundTint="#EF4444"
-            android:text="REGISTRAR REPORTE"
-            android:textColor="#FFFFFF"
-            android:textStyle="bold"
-            android:textSize="16sp"/>
-
-        <Button
-            android:id="@+id/btnVerHistorial"
-            android:layout_width="match_parent"
-            android:layout_height="56dp"
-            android:layout_marginTop="16dp"
-            android:backgroundTint="#202636"
-            android:text="Ver historial de reportes"
-            android:textAllCaps="false"
-            android:textColor="#94A3B8"
-            android:textStyle="bold"
-            app:cornerRadius="12dp" />
-
+            android:layout_marginStart="16dp"
+            android:scaleType="centerCrop"
+            android:visibility="gone"
+            android:background="#171B26" />
     </LinearLayout>
-</ScrollView>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"/>
+
+    <!-- Botón Enviar Principal -->
+    <Button
+        android:id="@+id/btnEnviarReporte"
+        android:layout_width="match_parent"
+        android:layout_height="54dp"
+        android:backgroundTint="#EF4444"
+        android:textColor="#FFFFFF"
+        android:textStyle="bold"
+        android:text="ENVIAR ALERTA"/>
+
+    <!-- Botón Cancelar debajo del principal -->
+    <TextView
+        android:id="@+id/btnVolverReporte"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:minHeight="48dp"
+        android:gravity="center"
+        android:text="Cancelar y Volver"
+        android:textColor="#94A3B8"
+        android:padding="12dp"
+        android:layout_marginTop="8dp"/>
+
+</LinearLayout>

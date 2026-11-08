@@ -12,8 +12,6 @@ import android.widget.Filterable;
 import android.widget.TextView;
 
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 
@@ -29,25 +27,14 @@ public class DireccionAdapter extends ArrayAdapter<ResultadoDireccion> implement
         this.geocoder = new Geocoder(context, new Locale("es", "CL"));
     }
 
-    public void actualizarDatos(List<ResultadoDireccion> nuevos) {
-        if (this.resultados == null) {
-            this.resultados = new ArrayList<>();
-        }
-        this.resultados.clear();
-        if (nuevos != null) {
-            this.resultados.addAll(nuevos);
-        }
-        notifyDataSetChanged();
-    }
-
     @Override
     public int getCount() {
-        return resultados != null ? resultados.size() : 0;
+        return resultados.size();
     }
 
     @Override
     public ResultadoDireccion getItem(int position) {
-        if (resultados != null && position >= 0 && position < resultados.size()) {
+        if (position >= 0 && position < resultados.size()) {
             return resultados.get(position);
         }
         return null;
@@ -65,19 +52,26 @@ public class DireccionAdapter extends ArrayAdapter<ResultadoDireccion> implement
         ResultadoDireccion item = getItem(position);
         if (item != null) {
             String textoCompleto = item.getNombre();
-            if (textoCompleto != null && textoCompleto.contains(",")) {
+            if (textoCompleto.contains(",")) {
                 String[] partes = textoCompleto.split(",", 2);
-                if (tvTitulo != null) tvTitulo.setText(partes[0].trim());
-                if (tvSubtitulo != null) {
-                    tvSubtitulo.setText(partes[1].trim());
-                    tvSubtitulo.setVisibility(View.VISIBLE);
-                }
+                tvTitulo.setText(partes[0].trim());
+                tvSubtitulo.setText(partes[1].trim());
+                tvSubtitulo.setVisibility(View.VISIBLE);
             } else {
-                if (tvTitulo != null) tvTitulo.setText(textoCompleto);
-                if (tvSubtitulo != null) tvSubtitulo.setVisibility(View.GONE);
+                tvTitulo.setText(textoCompleto);
+                tvSubtitulo.setVisibility(View.GONE);
             }
         }
         return convertView;
+    }
+
+    // MÉTODO FALTANTE RESTAURADO PARA QUE MAINACTIVITY COMPILE
+    public void actualizarDatos(List<ResultadoDireccion> nuevosDatos) {
+        resultados.clear();
+        if (nuevosDatos != null) {
+            resultados.addAll(nuevosDatos);
+        }
+        notifyDataSetChanged();
     }
 
     @Override
@@ -90,6 +84,7 @@ public class DireccionAdapter extends ArrayAdapter<ResultadoDireccion> implement
                     List<ResultadoDireccion> lista = new ArrayList<>();
                     String consulta = constraint.toString().trim();
 
+                    // RESCATE DE NÚMERO
                     String numeroEscrito = "";
                     for (String parte : consulta.split("\\s+")) {
                         if (parte.matches(".*\\d+.*")) {
@@ -103,7 +98,10 @@ public class DireccionAdapter extends ArrayAdapter<ResultadoDireccion> implement
 
                         try {
                             direcciones = geocoder.getFromLocationName(
-                                    consulta, 10, -21.0, -70.3, -20.0, -69.8
+                                    consulta,
+                                    10,
+                                    -21.0, -70.3,
+                                    -20.0, -69.8
                             );
                         } catch (Exception ignored) {}
 
@@ -159,30 +157,6 @@ public class DireccionAdapter extends ArrayAdapter<ResultadoDireccion> implement
                         e.printStackTrace();
                     }
 
-                    // SOLUCIÓN: Ordenamiento de prioridad
-                    // Fuerza a que los nombres que empiezan exactamente con lo que escribes se vayan arriba de la lista
-                    if (!lista.isEmpty()) {
-                        Collections.sort(lista, new Comparator<ResultadoDireccion>() {
-                            @Override
-                            public int compare(ResultadoDireccion d1, ResultadoDireccion d2) {
-                                String busqueda = consulta.toLowerCase();
-                                String nombre1 = d1.getNombre().toLowerCase();
-                                String nombre2 = d2.getNombre().toLowerCase();
-
-                                boolean empieza1 = nombre1.startsWith(busqueda);
-                                boolean empieza2 = nombre2.startsWith(busqueda);
-
-                                // Si el primero empieza con la búsqueda y el segundo no, el primero va arriba (-1)
-                                if (empieza1 && !empieza2) return -1;
-                                // Si el segundo empieza con la búsqueda y el primero no, el segundo sube (1)
-                                if (!empieza1 && empieza2) return 1;
-
-                                // Si ambos empiezan igual (o ninguno), se ordenan alfabéticamente
-                                return nombre1.compareTo(nombre2);
-                            }
-                        });
-                    }
-
                     filterResults.values = lista;
                     filterResults.count = lista.size();
                 } else {
@@ -203,18 +177,9 @@ public class DireccionAdapter extends ArrayAdapter<ResultadoDireccion> implement
                         notifyDataSetInvalidated();
                     }
                 } else {
-                    if (resultados == null) resultados = new ArrayList<>();
                     resultados.clear();
                     notifyDataSetInvalidated();
                 }
-            }
-
-            @Override
-            public CharSequence convertResultToString(Object resultValue) {
-                if (resultValue instanceof ResultadoDireccion) {
-                    return ((ResultadoDireccion) resultValue).getNombre();
-                }
-                return super.convertResultToString(resultValue);
             }
         };
     }

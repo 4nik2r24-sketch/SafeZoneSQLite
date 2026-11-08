@@ -39,7 +39,8 @@
             </intent-filter>
         </activity>
 
-        <activity android:name=".ReportActivity" />
+        <activity android:name=".ReportActivity"
+            android:exported="false"/>
         <activity android:name=".ContactosActivity" />
 
     </application>

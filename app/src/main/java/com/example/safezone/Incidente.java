@@ -1,12 +1,17 @@
 package com.example.safezone;
 
 public class Incidente {
-    private final String idDelito;
-    private final double latitud;
-    private final double longitud;
-    private final String tipoCrimen;
-    private final String descripcionDelincuente;
-    private final String horario;
+
+    private String idDelito;
+    private double latitud;
+    private double longitud;
+    private String tipoCrimen;
+    private String descripcionDelincuente;
+    private String horario;
+    private String rutaFoto; // NUEVO: Permite recordar la foto
+
+    public Incidente() {
+    }
 
     public Incidente(String idDelito, double latitud, double longitud, String tipoCrimen, String descripcionDelincuente, String horario) {
         this.idDelito = idDelito;
@@ -18,9 +23,23 @@ public class Incidente {
     }
 
     public String getIdDelito() { return idDelito; }
+    public void setIdDelito(String idDelito) { this.idDelito = idDelito; }
+
     public double getLatitud() { return latitud; }
+    public void setLatitud(double latitud) { this.latitud = latitud; }
+
     public double getLongitud() { return longitud; }
+    public void setLongitud(double longitud) { this.longitud = longitud; }
+
     public String getTipoCrimen() { return tipoCrimen; }
+    public void setTipoCrimen(String tipoCrimen) { this.tipoCrimen = tipoCrimen; }
+
     public String getDescripcionDelincuente() { return descripcionDelincuente; }
+    public void setDescripcionDelincuente(String descripcionDelincuente) { this.descripcionDelincuente = descripcionDelincuente; }
+
     public String getHorario() { return horario; }
+    public void setHorario(String horario) { this.horario = horario; }
+
+    public String getRutaFoto() { return rutaFoto; }
+    public void setRutaFoto(String rutaFoto) { this.rutaFoto = rutaFoto; }
 }
