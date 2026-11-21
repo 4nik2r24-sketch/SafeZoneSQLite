@@ -137,7 +137,7 @@
         </LinearLayout>
     </LinearLayout>
 
-    <!-- NUEVO: BOTÓN CENTRAR MAPA -->
+    <!-- BOTÓN CENTRAR MAPA -->
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/btnCentrarMapa"
         android:layout_width="wrap_content"
@@ -228,6 +228,41 @@
             android:visibility="gone"
             android:background="#0A0E18"
             android:layout_marginBottom="16dp"/>
+
+        <!-- BOTONES DE GESTIÓN DEL REPORTE -->
+        <LinearLayout
+            android:id="@+id/layoutAccionesReporte"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:weightSum="2"
+            android:visibility="gone"
+            android:layout_marginBottom="12dp">
+
+            <Button
+                android:id="@+id/btnModificarReporte"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_weight="1"
+                android:layout_marginEnd="6dp"
+                android:backgroundTint="#1E293B"
+                android:text="Modificar"
+                android:textColor="#38BDF8"
+                android:textAllCaps="false"
+                android:textStyle="bold" />
+
+            <Button
+                android:id="@+id/btnEliminarReporte"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_weight="1"
+                android:layout_marginStart="6dp"
+                android:backgroundTint="#EF4444"
+                android:text="Eliminar"
+                android:textColor="#FFFFFF"
+                android:textAllCaps="false"
+                android:textStyle="bold" />
+        </LinearLayout>
 
         <Button
             android:id="@+id/btnRutaSegura"

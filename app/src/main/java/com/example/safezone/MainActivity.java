@@ -4,6 +4,7 @@ import android.Manifest;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.graphics.PorterDuff;
@@ -15,6 +16,7 @@ import android.os.Looper;
 import android.telephony.SmsManager;
 import android.text.Editable;
 import android.text.TextWatcher;
+import android.util.Base64;
 import android.util.Log;
 import android.view.View;
 import android.view.inputmethod.InputMethodManager;
@@ -56,6 +58,7 @@ import org.osmdroid.views.overlay.Polygon;
 import org.osmdroid.views.overlay.Polyline;
 
 import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
@@ -67,10 +70,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-
-import android.graphics.Bitmap;
-import android.util.Base64;
-import java.io.ByteArrayOutputStream;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -109,6 +108,8 @@ public class MainActivity extends AppCompatActivity {
     private FloatingActionButton btnFlotanteSOS, btnCentrarMapa;
     private CardView btnPerfilContacto;
     private Button btnFiltroVivo, btnFiltroHistorial, btnRutaSegura;
+    private View layoutAccionesReporte;
+    private Button btnModificarReporte, btnEliminarReporte;
     private MapView mapa;
 
     private AutoCompleteTextView txtBuscar;
@@ -172,6 +173,10 @@ public class MainActivity extends AppCompatActivity {
         tvDescripcion = findViewById(R.id.tvDescripcion);
         ivFotoReporte = findViewById(R.id.ivFotoReporte);
 
+        layoutAccionesReporte = findViewById(R.id.layoutAccionesReporte);
+        btnModificarReporte = findViewById(R.id.btnModificarReporte);
+        btnEliminarReporte = findViewById(R.id.btnEliminarReporte);
+
         btnFiltroVivo = findViewById(R.id.btnFiltroVivo);
         btnFiltroHistorial = findViewById(R.id.btnFiltroHistorial);
         btnFlotanteSOS = findViewById(R.id.btnFlotanteSOS);
@@ -187,6 +192,18 @@ public class MainActivity extends AppCompatActivity {
         if (cardBuscador != null) txtBuscar.setDropDownAnchor(cardBuscador.getId());
         direccionAdapter = new DireccionAdapter(this);
         txtBuscar.setAdapter(direccionAdapter);
+
+        btnModificarReporte.setOnClickListener(v -> {
+            if (idDelitoSeleccionado != null) {
+                mostrarDialogoModificar();
+            }
+        });
+
+        btnEliminarReporte.setOnClickListener(v -> {
+            if (idDelitoSeleccionado != null) {
+                confirmarEliminacion();
+            }
+        });
 
         btnFiltroVivo.setOnClickListener(v -> {
             modoHistorial = false;
@@ -287,6 +304,7 @@ public class MainActivity extends AppCompatActivity {
             public boolean singleTapConfirmedHelper(GeoPoint p) {
                 bottomSheetBehavior.setState(BottomSheetBehavior.STATE_COLLAPSED);
                 idDelitoSeleccionado = null;
+                if (layoutAccionesReporte != null) layoutAccionesReporte.setVisibility(View.GONE);
                 return false;
             }
             @Override
@@ -296,7 +314,6 @@ public class MainActivity extends AppCompatActivity {
             }
         };
 
-        // Registrar el receptor de toques desde el inicio para que siempre responda
         mapa.getOverlays().add(new MapEventsOverlay(receptorEventos));
         mapa.invalidate();
 
@@ -330,7 +347,6 @@ public class MainActivity extends AppCompatActivity {
                 });
     }
 
-    // READ EN TIEMPO REAL (FIRESTORE)
     private void escucharIncidentesEnTiempoReal() {
         listenerIncidentes = db.collection("Incidentes")
                 .addSnapshotListener((snapshots, error) -> {
@@ -432,14 +448,12 @@ public class MainActivity extends AppCompatActivity {
         mapa.invalidate();
     }
 
-    // CREATE (FIRESTORE)
     private void procesarNuevoReporte(double lat, double lon, String tipo, String horario, String desc, String rutaFoto) {
         String idGenerado = String.valueOf(System.currentTimeMillis());
 
         double latFinal = lat;
         double lonFinal = lon;
 
-        // Si ya hay un reporte en el mismo punto exacto, desplaza ligeramente el nuevo pin (~10-15 m)
         for (Incidente inc : todosLosIncidentesNube) {
             if (Math.abs(inc.getLatitud() - latFinal) < 0.00008 && Math.abs(inc.getLongitud() - lonFinal) < 0.00008) {
                 latFinal += (Math.random() - 0.5) * 0.00025;
@@ -495,7 +509,6 @@ public class MainActivity extends AppCompatActivity {
     private Bitmap decodificarFoto(String datoFoto) {
         if (datoFoto == null || datoFoto.isEmpty()) return null;
         try {
-            // Solo lee como archivo si es una ruta local real, NO si empieza con "/9j/" (Base64)
             if (datoFoto.startsWith("/data/") || datoFoto.startsWith("/storage/")) {
                 return BitmapFactory.decodeFile(datoFoto);
             }
@@ -506,6 +519,7 @@ public class MainActivity extends AppCompatActivity {
             return null;
         }
     }
+
     private void cambiarColorPin(Marker pin, int colorHex) {
         android.graphics.drawable.Drawable icono = ContextCompat.getDrawable(this, org.osmdroid.library.R.drawable.marker_default);
         if (icono != null) {
@@ -551,6 +565,7 @@ public class MainActivity extends AppCompatActivity {
             }
 
             if (btnRutaSegura != null) btnRutaSegura.setVisibility(View.GONE);
+            if (layoutAccionesReporte != null) layoutAccionesReporte.setVisibility(View.VISIBLE);
 
             bottomSheetBehavior.setState(BottomSheetBehavior.STATE_EXPANDED);
             return true;
@@ -559,6 +574,7 @@ public class MainActivity extends AppCompatActivity {
         mapa.getOverlays().add(marcador);
         return marcador;
     }
+
     private void crearNuevaZonaVisual(GeoPoint punto, Marker pinInicial, boolean esAntiguo) {
         Polygon perimetro = new Polygon();
         perimetro.setPoints(Polygon.pointsAsCircle(punto, 60.0));
@@ -665,7 +681,6 @@ public class MainActivity extends AppCompatActivity {
         }).show();
     }
 
-    // UPDATE (FIRESTORE)
     private void mostrarDialogoModificar() {
         EditText input = new EditText(this);
         input.setText(tvDescripcion.getText().toString());
@@ -685,7 +700,6 @@ public class MainActivity extends AppCompatActivity {
                 }).setNegativeButton("Cancelar", null).show();
     }
 
-    // DELETE (FIRESTORE)
     private void confirmarEliminacion() {
         new AlertDialog.Builder(this).setTitle("Confirmar").setMessage("¿Eliminar reporte permanentemente?")
                 .setPositiveButton("Eliminar", (d, w) -> {
@@ -695,6 +709,7 @@ public class MainActivity extends AppCompatActivity {
                                 .addOnSuccessListener(aVoid -> {
                                     bottomSheetBehavior.setState(BottomSheetBehavior.STATE_COLLAPSED);
                                     idDelitoSeleccionado = null;
+                                    if (layoutAccionesReporte != null) layoutAccionesReporte.setVisibility(View.GONE);
                                     Toast.makeText(this, "Reporte eliminado de la nube", Toast.LENGTH_SHORT).show();
                                 })
                                 .addOnFailureListener(e -> Toast.makeText(this, "Error al eliminar", Toast.LENGTH_SHORT).show());
@@ -806,6 +821,7 @@ public class MainActivity extends AppCompatActivity {
         }
 
         if (ivFotoReporte != null) ivFotoReporte.setVisibility(View.GONE);
+        if (layoutAccionesReporte != null) layoutAccionesReporte.setVisibility(View.GONE);
         if (btnRutaSegura != null) btnRutaSegura.setVisibility(View.VISIBLE);
 
         idDelitoSeleccionado = null;

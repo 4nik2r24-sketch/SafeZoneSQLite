@@ -84,7 +84,7 @@
             android:layout_height="wrap_content"
             android:backgroundTint="#1E293B"
             android:textColor="#38BDF8"
-            android:text="📸 Añadir Foto"/>
+            android:text="Añadir Foto"/>
 
         <ImageView
             android:id="@+id/ivVistaPreviaFoto"
