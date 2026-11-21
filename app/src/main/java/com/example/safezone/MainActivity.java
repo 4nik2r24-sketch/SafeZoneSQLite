@@ -1,7 +1,6 @@
 package com.example.safezone;
 
 import android.Manifest;
-import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
@@ -9,7 +8,6 @@ import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.graphics.PorterDuff;
 import android.location.Location;
-import android.location.LocationManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
@@ -19,7 +17,6 @@ import android.text.Editable;
 import android.text.TextWatcher;
 import android.util.Log;
 import android.view.View;
-import android.view.ViewGroup;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.AutoCompleteTextView;
 import android.widget.Button;
@@ -34,8 +31,16 @@ import androidx.cardview.widget.CardView;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
+import com.google.android.gms.location.FusedLocationProviderClient;
+import com.google.android.gms.location.LocationServices;
+import com.google.android.gms.location.Priority;
 import com.google.android.material.bottomsheet.BottomSheetBehavior;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
+import com.google.firebase.FirebaseApp;
+import com.google.firebase.firestore.FieldValue;
+import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.ListenerRegistration;
+import com.google.firebase.firestore.QueryDocumentSnapshot;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -57,23 +62,33 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+
+import android.graphics.Bitmap;
+import android.util.Base64;
+import java.io.ByteArrayOutputStream;
 
 public class MainActivity extends AppCompatActivity {
 
     private static final String TAG = "SafeZoneMain";
     private static final XYTileSource FUENTE_LIBRE = new XYTileSource(
             "OSMFrance", 0, 19, 256, ".png",
-            new String[]{"https://a.tile.openstreetmap.fr/osmfr/", "https://b.tile.openstreetmap.fr/osmfr/", "https://c.tile.openstreetmap.fr/osmfr/"}
+            new String[]{
+                    "https://a.tile.openstreetmap.fr/osmfr/",
+                    "https://b.tile.openstreetmap.fr/osmfr/",
+                    "https://c.tile.openstreetmap.fr/osmfr/"
+            }
     );
 
     private static class ZonaRiesgo {
         GeoPoint centro;
         int totalReportes;
         Polygon perimetroVisual;
-        List<Marker> marcadores = new ArrayList<>(); // Guarda los pines para teñirlos al mutar la zona
+        List<Marker> marcadores = new ArrayList<>();
 
         ZonaRiesgo(GeoPoint centro, Polygon perimetroVisual) {
             this.centro = centro;
@@ -82,7 +97,8 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private DatabaseHelper dbHelper;
+    private FirebaseFirestore db;
+    private ListenerRegistration listenerIncidentes;
     private String idDelitoSeleccionado = null;
     private boolean modoHistorial = false;
     private Polyline rutaActual = null;
@@ -104,6 +120,7 @@ public class MainActivity extends AppCompatActivity {
     private final Handler handlerDebounce = new Handler(Looper.getMainLooper());
     private Runnable tareaBusqueda;
 
+    private final List<Incidente> todosLosIncidentesNube = new ArrayList<>();
     private final List<Incidente> listaIncidentes = new ArrayList<>();
     private final List<ZonaRiesgo> listaZonas = new ArrayList<>();
     private MapEventsReceiver receptorEventos;
@@ -128,7 +145,9 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        dbHelper = new DatabaseHelper(this);
+        FirebaseApp.initializeApp(this);
+        db = FirebaseFirestore.getInstance();
+
         File cacheOsm = new File(getCacheDir(), "osmdroid");
         borrarDirectorio(cacheOsm);
 
@@ -175,7 +194,7 @@ public class MainActivity extends AppCompatActivity {
             btnFiltroVivo.setTextColor(Color.WHITE);
             btnFiltroHistorial.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.parseColor("#171B26")));
             btnFiltroHistorial.setTextColor(Color.parseColor("#94A3B8"));
-            cargarIncidentesDesdeSQLite();
+            renderizarMapaSegunFiltro();
             Toast.makeText(this, "Mostrando últimas 24 hrs", Toast.LENGTH_SHORT).show();
         });
 
@@ -185,7 +204,7 @@ public class MainActivity extends AppCompatActivity {
             btnFiltroHistorial.setTextColor(Color.WHITE);
             btnFiltroVivo.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.parseColor("#171B26")));
             btnFiltroVivo.setTextColor(Color.parseColor("#94A3B8"));
-            cargarIncidentesDesdeSQLite();
+            renderizarMapaSegunFiltro();
             Toast.makeText(this, "Mostrando Historial Completo", Toast.LENGTH_SHORT).show();
         });
 
@@ -233,7 +252,6 @@ public class MainActivity extends AppCompatActivity {
                 marcadorLugarBuscado.setSnippet(dir.getNombre());
                 marcadorLugarBuscado.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM);
 
-                // Asignamos el celeste exclusivo para el buscador, usando el método robusto
                 cambiarColorPin(marcadorLugarBuscado, Color.parseColor("#38BDF8"));
 
                 mapa.getOverlays().add(marcadorLugarBuscado);
@@ -273,12 +291,16 @@ public class MainActivity extends AppCompatActivity {
             }
             @Override
             public boolean longPressHelper(GeoPoint p) {
-                iniciarReporteConUbicacionDispositivo();
+                iniciarReporteConUbicacionDispositivo(p);
                 return true;
             }
         };
 
-        cargarIncidentesDesdeSQLite();
+        // Registrar el receptor de toques desde el inicio para que siempre responda
+        mapa.getOverlays().add(new MapEventsOverlay(receptorEventos));
+        mapa.invalidate();
+
+        escucharIncidentesEnTiempoReal();
     }
 
     private void centrarEnMiUbicacion() {
@@ -287,45 +309,107 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         Toast.makeText(this, "Ubicando dispositivo...", Toast.LENGTH_SHORT).show();
-        com.google.android.gms.location.FusedLocationProviderClient cliente = com.google.android.gms.location.LocationServices.getFusedLocationProviderClient(this);
-        cliente.getCurrentLocation(100, null).addOnSuccessListener(this, loc -> {
-            if (loc != null) {
-                GeoPoint miPunto = new GeoPoint(loc.getLatitude(), loc.getLongitude());
-                mapa.getController().animateTo(miPunto);
-                mapa.getController().setZoom(17.5);
-            } else {
-                Toast.makeText(this, "Esperando señal satelital...", Toast.LENGTH_SHORT).show();
-            }
-        });
+        FusedLocationProviderClient cliente = LocationServices.getFusedLocationProviderClient(this);
+        cliente.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
+                .addOnSuccessListener(this, loc -> {
+                    if (loc != null) {
+                        GeoPoint miPunto = new GeoPoint(loc.getLatitude(), loc.getLongitude());
+                        mapa.getController().animateTo(miPunto);
+                        mapa.getController().setZoom(17.5);
+                    } else {
+                        cliente.getLastLocation().addOnSuccessListener(this, ultimaLoc -> {
+                            if (ultimaLoc != null) {
+                                GeoPoint miPunto = new GeoPoint(ultimaLoc.getLatitude(), ultimaLoc.getLongitude());
+                                mapa.getController().animateTo(miPunto);
+                                mapa.getController().setZoom(17.5);
+                            } else {
+                                Toast.makeText(this, "Esperando señal satelital...", Toast.LENGTH_SHORT).show();
+                            }
+                        });
+                    }
+                });
     }
 
-    private void cargarIncidentesDesdeSQLite() {
+    // READ EN TIEMPO REAL (FIRESTORE)
+    private void escucharIncidentesEnTiempoReal() {
+        listenerIncidentes = db.collection("Incidentes")
+                .addSnapshotListener((snapshots, error) -> {
+                    if (error != null) {
+                        Log.e(TAG, "Error al escuchar Firestore: " + error.getMessage(), error);
+                        runOnUiThread(() -> Toast.makeText(this, "Error al leer mapa: " + error.getMessage(), Toast.LENGTH_LONG).show());
+                        return;
+                    }
+                    if (snapshots == null) return;
+
+                    todosLosIncidentesNube.clear();
+                    for (QueryDocumentSnapshot doc : snapshots) {
+                        String id = doc.getString("idDelito");
+                        if (id == null || id.isEmpty()) id = doc.getId();
+
+                        Object latObj = doc.get("latitud");
+                        Object lonObj = doc.get("longitud");
+                        Double lat = (latObj instanceof Number) ? ((Number) latObj).doubleValue() : null;
+                        Double lon = (lonObj instanceof Number) ? ((Number) lonObj).doubleValue() : null;
+
+                        String tipo = doc.getString("tipoCrimen");
+                        String desc = doc.getString("descripcionDelincuente");
+                        String horario = doc.getString("horario");
+                        String rutaFoto = doc.getString("rutaFoto");
+
+                        if (lat != null && lon != null) {
+                            Incidente inc = new Incidente(
+                                    id,
+                                    lat,
+                                    lon,
+                                    tipo != null ? tipo : "Incidente",
+                                    desc != null ? desc : "",
+                                    horario != null ? horario : "N/A"
+                            );
+                            inc.setRutaFoto(rutaFoto);
+                            todosLosIncidentesNube.add(inc);
+                        }
+                    }
+
+                    runOnUiThread(this::renderizarMapaSegunFiltro);
+                });
+    }
+
+    private void renderizarMapaSegunFiltro() {
         mapa.getOverlays().clear();
+        mapa.getOverlays().add(new MapEventsOverlay(receptorEventos));
         if (rutaActual != null) mapa.getOverlays().add(rutaActual);
         listaIncidentes.clear();
         listaZonas.clear();
-        mapa.getOverlays().add(new MapEventsOverlay(receptorEventos));
 
-        List<Incidente> incidentes = dbHelper.obtenerTodosLosIncidentes();
         long ahora = System.currentTimeMillis();
         long unDiaMillis = 24L * 60 * 60 * 1000L;
 
-        for (Incidente inc : incidentes) {
+        for (Incidente inc : todosLosIncidentesNube) {
             long tiempoIncidente;
-            try { tiempoIncidente = Long.parseLong(inc.getIdDelito()); }
-            catch (Exception e) { tiempoIncidente = ahora; }
+            try {
+                tiempoIncidente = Long.parseLong(inc.getIdDelito());
+            } catch (Exception e) {
+                tiempoIncidente = ahora;
+            }
 
             boolean esAntiguo = (ahora - tiempoIncidente) > unDiaMillis;
 
             if (!modoHistorial && esAntiguo) {
-                continue; // Omitir antiguos si estamos en "En Vivo"
+                continue;
             }
 
             listaIncidentes.add(inc);
             GeoPoint punto = new GeoPoint(inc.getLatitud(), inc.getLongitud());
 
-            // Creamos el pin y lo obtenemos para guardarlo en la zona
-            Marker nuevoPin = agregarMarcador(inc.getIdDelito(), punto, inc.getTipoCrimen(), inc.getHorario(), inc.getDescripcionDelincuente(), inc.getRutaFoto(), esAntiguo);
+            Marker nuevoPin = agregarMarcador(
+                    inc.getIdDelito(),
+                    punto,
+                    inc.getTipoCrimen(),
+                    inc.getHorario(),
+                    inc.getDescripcionDelincuente(),
+                    inc.getRutaFoto(),
+                    esAntiguo
+            );
 
             ZonaRiesgo zonaCercana = null;
             for (ZonaRiesgo z : listaZonas) {
@@ -348,21 +432,80 @@ public class MainActivity extends AppCompatActivity {
         mapa.invalidate();
     }
 
+    // CREATE (FIRESTORE)
     private void procesarNuevoReporte(double lat, double lon, String tipo, String horario, String desc, String rutaFoto) {
         String idGenerado = String.valueOf(System.currentTimeMillis());
-        Incidente nuevoIncidente = new Incidente(idGenerado, lat, lon, tipo, desc, horario);
-        nuevoIncidente.setRutaFoto(rutaFoto);
 
-        if (dbHelper.insertarIncidente(nuevoIncidente)) {
-            cargarIncidentesDesdeSQLite();
-            mapa.getController().animateTo(new GeoPoint(lat, lon));
-            Toast.makeText(this, "Reporte guardado con éxito", Toast.LENGTH_SHORT).show();
-        } else {
-            Toast.makeText(this, "Error al guardar el reporte", Toast.LENGTH_SHORT).show();
+        double latFinal = lat;
+        double lonFinal = lon;
+
+        // Si ya hay un reporte en el mismo punto exacto, desplaza ligeramente el nuevo pin (~10-15 m)
+        for (Incidente inc : todosLosIncidentesNube) {
+            if (Math.abs(inc.getLatitud() - latFinal) < 0.00008 && Math.abs(inc.getLongitud() - lonFinal) < 0.00008) {
+                latFinal += (Math.random() - 0.5) * 0.00025;
+                lonFinal += (Math.random() - 0.5) * 0.00025;
+            }
+        }
+
+        String fotoParaNube = convertirFotoABase64(rutaFoto);
+
+        Map<String, Object> reporteNube = new HashMap<>();
+        reporteNube.put("idDelito", idGenerado);
+        reporteNube.put("latitud", lat);
+        reporteNube.put("longitud", lon);
+        reporteNube.put("tipoCrimen", tipo);
+        reporteNube.put("descripcionDelincuente", desc);
+        reporteNube.put("horario", horario);
+        reporteNube.put("rutaFoto", fotoParaNube);
+        reporteNube.put("timestamp", FieldValue.serverTimestamp());
+
+        db.collection("Incidentes").document(idGenerado).set(reporteNube)
+                .addOnSuccessListener(aVoid -> {
+                    GeoPoint nuevoPunto = new GeoPoint(lat, lon);
+                    mapa.getController().animateTo(nuevoPunto);
+                    mapa.getController().setZoom(17.0);
+                    Toast.makeText(this, "Reporte guardado en la nube", Toast.LENGTH_SHORT).show();
+                })
+                .addOnFailureListener(e -> Toast.makeText(this, "Error de conexión: " + e.getMessage(), Toast.LENGTH_SHORT).show());
+    }
+
+    private String convertirFotoABase64(String rutaLocal) {
+        if (rutaLocal == null || rutaLocal.isEmpty()) return "";
+        try {
+            Bitmap original = BitmapFactory.decodeFile(rutaLocal);
+            if (original == null) return "";
+
+            int maxLado = 600;
+            int ancho = original.getWidth();
+            int alto = original.getHeight();
+            if (ancho > maxLado || alto > maxLado) {
+                float escala = Math.min((float) maxLado / ancho, (float) maxLado / alto);
+                original = Bitmap.createScaledBitmap(original, Math.round(ancho * escala), Math.round(alto * escala), true);
+            }
+
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            original.compress(Bitmap.CompressFormat.JPEG, 70, baos);
+            return Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP);
+        } catch (Exception e) {
+            Log.e(TAG, "Error al convertir foto a Base64", e);
+            return "";
         }
     }
 
-    // MÉTODO NUEVO: Aísla el ícono y lo tiñe sin afectar a los demás pines
+    private Bitmap decodificarFoto(String datoFoto) {
+        if (datoFoto == null || datoFoto.isEmpty()) return null;
+        try {
+            // Solo lee como archivo si es una ruta local real, NO si empieza con "/9j/" (Base64)
+            if (datoFoto.startsWith("/data/") || datoFoto.startsWith("/storage/")) {
+                return BitmapFactory.decodeFile(datoFoto);
+            }
+            byte[] bytes = Base64.decode(datoFoto, Base64.DEFAULT);
+            return BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
+        } catch (Exception e) {
+            Log.e(TAG, "Error al decodificar foto", e);
+            return null;
+        }
+    }
     private void cambiarColorPin(Marker pin, int colorHex) {
         android.graphics.drawable.Drawable icono = ContextCompat.getDrawable(this, org.osmdroid.library.R.drawable.marker_default);
         if (icono != null) {
@@ -380,7 +523,6 @@ public class MainActivity extends AppCompatActivity {
         marcador.setSnippet(descripcion);
         marcador.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM);
 
-        // Si es antiguo lo pintamos gris fijo, si no, le ponemos el verde inicial por defecto (luego la zona lo actualizará)
         if (esAntiguo) {
             cambiarColorPin(marcador, Color.parseColor("#64748B"));
         } else {
@@ -396,7 +538,7 @@ public class MainActivity extends AppCompatActivity {
 
             if (ivFotoReporte != null) {
                 if (rutaFoto != null && !rutaFoto.isEmpty()) {
-                    android.graphics.Bitmap bmp = BitmapFactory.decodeFile(rutaFoto);
+                    Bitmap bmp = decodificarFoto(rutaFoto);
                     if (bmp != null) {
                         ivFotoReporte.setImageBitmap(bmp);
                         ivFotoReporte.setVisibility(View.VISIBLE);
@@ -417,7 +559,6 @@ public class MainActivity extends AppCompatActivity {
         mapa.getOverlays().add(marcador);
         return marcador;
     }
-
     private void crearNuevaZonaVisual(GeoPoint punto, Marker pinInicial, boolean esAntiguo) {
         Polygon perimetro = new Polygon();
         perimetro.setPoints(Polygon.pointsAsCircle(punto, 60.0));
@@ -449,7 +590,6 @@ public class MainActivity extends AppCompatActivity {
         long ahora = System.currentTimeMillis();
         long unDiaMillis = 24L * 60 * 60 * 1000L;
 
-        // Actualizamos de manera dinámica todos los pines de esta zona (excepto los antiguos/grises)
         for (Marker pin : zona.marcadores) {
             long tiempoPin;
             try { tiempoPin = Long.parseLong(pin.getId()); } catch (Exception e) { tiempoPin = ahora; }
@@ -465,7 +605,10 @@ public class MainActivity extends AppCompatActivity {
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE) != PackageManager.PERMISSION_GRANTED ||
                 ActivityCompat.checkSelfPermission(this, Manifest.permission.SEND_SMS) != PackageManager.PERMISSION_GRANTED ||
                 ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CALL_PHONE, Manifest.permission.SEND_SMS, Manifest.permission.ACCESS_FINE_LOCATION}, 200);
+            ActivityCompat.requestPermissions(this, new String[]{
+                    Manifest.permission.CALL_PHONE,
+                    Manifest.permission.SEND_SMS,
+                    Manifest.permission.ACCESS_FINE_LOCATION}, 200);
             return;
         }
 
@@ -476,12 +619,20 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
+        Toast.makeText(this, "Obteniendo ubicación en vivo para SOS...", Toast.LENGTH_SHORT).show();
+
+        FusedLocationProviderClient cliente = LocationServices.getFusedLocationProviderClient(this);
+        cliente.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
+                .addOnSuccessListener(this, loc -> despacharSMSYLlamar(contactos, loc))
+                .addOnFailureListener(this, e -> despacharSMSYLlamar(contactos, null));
+    }
+
+    private void despacharSMSYLlamar(List<Contacto> contactos, Location loc) {
         String mensajeSMS = "¡ALERTA SOS! Me encuentro en peligro.";
-        LocationManager lm = (LocationManager) getSystemService(LOCATION_SERVICE);
-        if (lm != null) {
-            Location loc = lm.getLastKnownLocation(LocationManager.GPS_PROVIDER);
-            if (loc == null) loc = lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
-            if (loc != null) mensajeSMS += " Mi ubicación exacta: https://maps.google.com/?q=" + loc.getLatitude() + "," + loc.getLongitude();
+        if (loc != null) {
+            mensajeSMS += " Mi ubicación exacta: https://maps.google.com/?q=" + loc.getLatitude() + "," + loc.getLongitude();
+        } else {
+            mensajeSMS += " (Sin señal GPS disponible en este momento).";
         }
 
         try {
@@ -490,7 +641,7 @@ public class MainActivity extends AppCompatActivity {
             for (Contacto c : contactos) {
                 smsManager.sendMultipartTextMessage(c.getTelefono(), null, partes, null, null);
             }
-            Toast.makeText(this, "SMS despachado a la red", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "SMS despachado con ubicación en vivo", Toast.LENGTH_SHORT).show();
         } catch (Exception e) {
             Toast.makeText(this, "Error SMS: " + e.getMessage(), Toast.LENGTH_SHORT).show();
         }
@@ -509,10 +660,12 @@ public class MainActivity extends AppCompatActivity {
     private void mostrarOpcionesGestion() {
         String[] opciones = {"✏️ Modificar descripción", "🗑️ Eliminar reporte"};
         new AlertDialog.Builder(this).setTitle("Gestión").setItems(opciones, (dialog, which) -> {
-            if (which == 0) mostrarDialogoModificar(); else if (which == 1) confirmarEliminacion();
+            if (which == 0) mostrarDialogoModificar();
+            else if (which == 1) confirmarEliminacion();
         }).show();
     }
 
+    // UPDATE (FIRESTORE)
     private void mostrarDialogoModificar() {
         EditText input = new EditText(this);
         input.setText(tvDescripcion.getText().toString());
@@ -521,54 +674,85 @@ public class MainActivity extends AppCompatActivity {
                 .setPositiveButton("Guardar", (d, w) -> {
                     String nuevaDesc = input.getText().toString().trim();
                     if (!nuevaDesc.isEmpty() && idDelitoSeleccionado != null) {
-                        if (dbHelper.actualizarDescripcion(idDelitoSeleccionado, nuevaDesc)) {
-                            tvDescripcion.setText(nuevaDesc);
-                            cargarIncidentesDesdeSQLite();
-                        }
+                        db.collection("Incidentes").document(idDelitoSeleccionado)
+                                .update("descripcionDelincuente", nuevaDesc)
+                                .addOnSuccessListener(aVoid -> {
+                                    tvDescripcion.setText(nuevaDesc);
+                                    Toast.makeText(this, "Reporte actualizado en la nube", Toast.LENGTH_SHORT).show();
+                                })
+                                .addOnFailureListener(e -> Toast.makeText(this, "Error al actualizar", Toast.LENGTH_SHORT).show());
                     }
                 }).setNegativeButton("Cancelar", null).show();
     }
 
+    // DELETE (FIRESTORE)
     private void confirmarEliminacion() {
         new AlertDialog.Builder(this).setTitle("Confirmar").setMessage("¿Eliminar reporte permanentemente?")
                 .setPositiveButton("Eliminar", (d, w) -> {
-                    if (idDelitoSeleccionado != null && dbHelper.eliminarIncidente(idDelitoSeleccionado)) {
-                        bottomSheetBehavior.setState(BottomSheetBehavior.STATE_COLLAPSED);
-                        cargarIncidentesDesdeSQLite();
-                        idDelitoSeleccionado = null;
+                    if (idDelitoSeleccionado != null) {
+                        db.collection("Incidentes").document(idDelitoSeleccionado)
+                                .delete()
+                                .addOnSuccessListener(aVoid -> {
+                                    bottomSheetBehavior.setState(BottomSheetBehavior.STATE_COLLAPSED);
+                                    idDelitoSeleccionado = null;
+                                    Toast.makeText(this, "Reporte eliminado de la nube", Toast.LENGTH_SHORT).show();
+                                })
+                                .addOnFailureListener(e -> Toast.makeText(this, "Error al eliminar", Toast.LENGTH_SHORT).show());
                     }
                 }).setNegativeButton("Cancelar", null).show();
     }
 
-    private void iniciarReporteConUbicacionDispositivo() {
+    private void abrirPantallaReporte(double lat, double lon) {
+        Intent intent = new Intent(MainActivity.this, ReportActivity.class);
+        intent.putExtra("LAT_MAPA", lat);
+        intent.putExtra("LON_MAPA", lon);
+        reporteLauncher.launch(intent);
+    }
+
+    private void iniciarReporteConUbicacionDispositivo(GeoPoint puntoTocado) {
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             solicitarPermisos();
+            Toast.makeText(this, "Acepta el permiso de ubicación para reportar.", Toast.LENGTH_SHORT).show();
             return;
         }
-        com.google.android.gms.location.FusedLocationProviderClient cliente = com.google.android.gms.location.LocationServices.getFusedLocationProviderClient(this);
-        cliente.getCurrentLocation(100, null).addOnSuccessListener(this, ubicacion -> {
-            if (ubicacion != null) {
-                Intent intent = new Intent(MainActivity.this, ReportActivity.class);
-                intent.putExtra("LAT_MAPA", ubicacion.getLatitude());
-                intent.putExtra("LON_MAPA", ubicacion.getLongitude());
-                reporteLauncher.launch(intent);
-            } else {
-                Toast.makeText(this, "Buscando satélites...", Toast.LENGTH_SHORT).show();
-            }
-        });
+
+        FusedLocationProviderClient cliente = LocationServices.getFusedLocationProviderClient(this);
+        cliente.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
+                .addOnSuccessListener(this, ubicacion -> {
+                    if (ubicacion != null) {
+                        abrirPantallaReporte(ubicacion.getLatitude(), ubicacion.getLongitude());
+                    } else {
+                        cliente.getLastLocation().addOnSuccessListener(this, ultimaLoc -> {
+                            if (ultimaLoc != null) {
+                                abrirPantallaReporte(ultimaLoc.getLatitude(), ultimaLoc.getLongitude());
+                            } else if (puntoTocado != null) {
+                                abrirPantallaReporte(puntoTocado.getLatitude(), puntoTocado.getLongitude());
+                            } else {
+                                Toast.makeText(this, "Sin señal GPS disponible.", Toast.LENGTH_SHORT).show();
+                            }
+                        });
+                    }
+                })
+                .addOnFailureListener(this, e -> {
+                    if (puntoTocado != null) {
+                        abrirPantallaReporte(puntoTocado.getLatitude(), puntoTocado.getLongitude());
+                    }
+                });
     }
 
     private void ejecutarBusquedaEnSegundoPlano(String consulta) {
         ejecutorRed.execute(() -> {
             List<ResultadoDireccion> listaSugerencias = new ArrayList<>();
-            HttpURLConnection conn = null; BufferedReader reader = null;
+            HttpURLConnection conn = null;
+            BufferedReader reader = null;
             try {
                 String queryCod = URLEncoder.encode(consulta, "UTF-8");
                 URL url = new URL("https://photon.komoot.io/api/?q=" + queryCod + "&lat=-20.2155&lon=-70.1513&limit=7&lang=es");
                 conn = (HttpURLConnection) url.openConnection();
                 if (conn.getResponseCode() == 200) {
                     reader = new BufferedReader(new InputStreamReader(conn.getInputStream()));
-                    StringBuilder sb = new StringBuilder(); String linea;
+                    StringBuilder sb = new StringBuilder();
+                    String linea;
                     while ((linea = reader.readLine()) != null) sb.append(linea);
                     JSONObject geoJson = new JSONObject(sb.toString());
                     JSONArray features = geoJson.optJSONArray("features");
@@ -583,8 +767,14 @@ public class MainActivity extends AppCompatActivity {
                         }
                     }
                 }
-            } catch (Exception e) { Log.e(TAG, "Error: " + e.getMessage());
-            } finally { try { if (reader != null) reader.close(); if (conn != null) conn.disconnect(); } catch (Exception ignored) {} }
+            } catch (Exception e) {
+                Log.e(TAG, "Error: " + e.getMessage());
+            } finally {
+                try {
+                    if (reader != null) reader.close();
+                    if (conn != null) conn.disconnect();
+                } catch (Exception ignored) {}
+            }
             runOnUiThread(() -> {
                 direccionAdapter.actualizarDatos(listaSugerencias);
                 if (!listaSugerencias.isEmpty() && txtBuscar.hasFocus()) txtBuscar.showDropDown();
@@ -595,7 +785,10 @@ public class MainActivity extends AppCompatActivity {
     private void evaluarPanoramaSector(GeoPoint puntoConsultado, String nombreLugar) {
         ZonaRiesgo zonaEncontrada = null;
         for (ZonaRiesgo z : listaZonas) {
-            if (z.centro.distanceToAsDouble(puntoConsultado) <= (60.0 + ((z.totalReportes - 1) * 25.0))) { zonaEncontrada = z; break; }
+            if (z.centro.distanceToAsDouble(puntoConsultado) <= (60.0 + ((z.totalReportes - 1) * 25.0))) {
+                zonaEncontrada = z;
+                break;
+            }
         }
 
         String encabezado = nombreLugar.contains(",") ? nombreLugar.split(",")[0].trim() : nombreLugar;
@@ -613,7 +806,6 @@ public class MainActivity extends AppCompatActivity {
         }
 
         if (ivFotoReporte != null) ivFotoReporte.setVisibility(View.GONE);
-
         if (btnRutaSegura != null) btnRutaSegura.setVisibility(View.VISIBLE);
 
         idDelitoSeleccionado = null;
@@ -627,17 +819,17 @@ public class MainActivity extends AppCompatActivity {
         }
 
         Toast.makeText(this, "🛰️ Trazando ruta...", Toast.LENGTH_SHORT).show();
-        com.google.android.gms.location.FusedLocationProviderClient clienteUbicacion =
-                com.google.android.gms.location.LocationServices.getFusedLocationProviderClient(this);
+        FusedLocationProviderClient clienteUbicacion = LocationServices.getFusedLocationProviderClient(this);
 
-        clienteUbicacion.getCurrentLocation(100, null).addOnSuccessListener(this, ubicacion -> {
-            if (ubicacion != null) {
-                GeoPoint origen = new GeoPoint(ubicacion.getLatitude(), ubicacion.getLongitude());
-                trazarRutaOSRM(origen, destino);
-            } else {
-                trazarRutaOSRM(new GeoPoint(-20.2155, -70.1513), destino);
-            }
-        });
+        clienteUbicacion.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
+                .addOnSuccessListener(this, ubicacion -> {
+                    if (ubicacion != null) {
+                        GeoPoint origen = new GeoPoint(ubicacion.getLatitude(), ubicacion.getLongitude());
+                        trazarRutaOSRM(origen, destino);
+                    } else {
+                        trazarRutaOSRM(new GeoPoint(-20.2155, -70.1513), destino);
+                    }
+                });
     }
 
     private void trazarRutaOSRM(GeoPoint origen, GeoPoint destino) {
@@ -657,7 +849,6 @@ public class MainActivity extends AppCompatActivity {
                     JSONArray routes = jsonResponse.optJSONArray("routes");
 
                     if (routes != null && routes.length() > 0) {
-                        int mejorIndiceRuta = 0;
                         int minimasIntersecciones = Integer.MAX_VALUE;
                         List<GeoPoint> puntosRutaMasSegura = new ArrayList<>();
 
@@ -684,7 +875,6 @@ public class MainActivity extends AppCompatActivity {
 
                             if (interseccionesDePeligro < minimasIntersecciones) {
                                 minimasIntersecciones = interseccionesDePeligro;
-                                mejorIndiceRuta = r;
                                 puntosRutaMasSegura = puntosRutaActual;
                             }
                         }
@@ -723,14 +913,27 @@ public class MainActivity extends AppCompatActivity {
         if (data != null) {
             try {
                 JSONArray jsonArray = new JSONArray(data);
-                for (int i = 0; i < jsonArray.length(); i++) lista.add(new Contacto(jsonArray.getJSONObject(i).getString("id"), jsonArray.getJSONObject(i).getString("nombre"), jsonArray.getJSONObject(i).getString("telefono")));
-            } catch (JSONException e) { e.printStackTrace(); }
+                for (int i = 0; i < jsonArray.length(); i++) {
+                    lista.add(new Contacto(
+                            jsonArray.getJSONObject(i).getString("id"),
+                            jsonArray.getJSONObject(i).getString("nombre"),
+                            jsonArray.getJSONObject(i).getString("telefono")
+                    ));
+                }
+            } catch (JSONException e) {
+                e.printStackTrace();
+            }
         }
         return lista;
     }
 
     private void solicitarPermisos() {
-        ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.CALL_PHONE, Manifest.permission.SEND_SMS}, 101);
+        ActivityCompat.requestPermissions(this, new String[]{
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION,
+                Manifest.permission.CALL_PHONE,
+                Manifest.permission.SEND_SMS
+        }, 101);
     }
 
     private void borrarDirectorio(File dir) {
@@ -743,4 +946,8 @@ public class MainActivity extends AppCompatActivity {
 
     @Override protected void onResume() { super.onResume(); if (mapa != null) mapa.onResume(); }
     @Override protected void onPause() { super.onPause(); if (mapa != null) mapa.onPause(); }
+    @Override protected void onDestroy() {
+        super.onDestroy();
+        if (listenerIncidentes != null) listenerIncidentes.remove();
+    }
 }
